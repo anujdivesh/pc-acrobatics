@@ -5,13 +5,14 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { PRODUCTS } from "../_data/products";
+import { withBase } from "@/lib/basePath";
 import { Legend } from "./panels";
 import type { Manifest, MapLayers, ProductData } from "./types";
 
 // Cesium needs the browser; the map is client-only.
 const MapView = dynamic(() => import("./MapView"), { ssr: false });
 
-const MANIFEST_URL = "/tonga/products/manifest.json";
+const MANIFEST_URL = withBase("/data/tonga/products/manifest.json");
 
 /** What each product puts on the map. */
 function layersFor(slug: string, d: ProductData | undefined): MapLayers {
@@ -56,7 +57,7 @@ export default function ProductsApp() {
             <p className="truncate text-sm font-semibold text-sky-600">Pacific Ocean Portal</p>
             <p className="truncate text-[11px] text-zinc-500">Point cloud products</p>
           </div>
-          <Link href="/pointcloud" className="ml-auto shrink-0 rounded-md border border-zinc-300 px-2 py-1 text-[11px] text-zinc-700 hover:bg-zinc-50">
+          <Link href="/" className="ml-auto shrink-0 rounded-md border border-zinc-300 px-2 py-1 text-[11px] text-zinc-700 hover:bg-zinc-50">
             3D viewer
           </Link>
           <button type="button" onClick={() => setSheetOpen((o) => !o)} aria-expanded={sheetOpen}
@@ -70,7 +71,7 @@ export default function ProductsApp() {
             <ul className="flex flex-wrap gap-1">
               {PRODUCTS.map((p) => (
                 <li key={p.slug}>
-                  <Link href={`/pointcloud-products/${p.slug}`} aria-current={p.slug === product.slug ? "page" : undefined}
+                  <Link href={`/products/${p.slug}`} aria-current={p.slug === product.slug ? "page" : undefined}
                     className={`block rounded-md px-2 py-1 text-[11px] transition-colors ${
                       p.slug === product.slug ? "bg-blue-600 text-white" : "bg-zinc-100 text-zinc-700 hover:bg-zinc-200"
                     }`}>

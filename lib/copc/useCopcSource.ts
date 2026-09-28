@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { withBase } from "@/lib/basePath";
 import type { Bounds2D, CopcMetadata, NodeData, WorkerRequest, WorkerResponse } from "./types";
 
 export type CopcStatus = {
@@ -108,7 +109,7 @@ export function useCopcSource(url: string) {
     worker.onerror = (event) =>
       setStatus((s) => ({ ...s, error: event.message || "point-cloud worker failed" }));
 
-    worker.postMessage({ type: "init", url, wasmUrl: "/laz-perf.wasm" } satisfies WorkerRequest);
+    worker.postMessage({ type: "init", url, wasmUrl: withBase("/laz-perf.wasm") } satisfies WorkerRequest);
 
     return () => {
       if (frame !== null) cancelAnimationFrame(frame);

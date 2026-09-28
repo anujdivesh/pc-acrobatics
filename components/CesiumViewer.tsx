@@ -10,13 +10,14 @@ import { useMap } from "./MapProvider";
 import { loadTerrainLayer, type TerrainLayerHandle } from "@/lib/terrain/terrainLayer";
 import { lonLatBounds } from "@/lib/terrain/types";
 import { loadCesium, type Cesium } from "@/lib/cesium/loadCesium";
+import { withBase } from "@/lib/basePath";
 
-const COPC_URL = "/tonga/topobathy.copc.laz";
+const COPC_URL = withBase("/data/tonga/topobathy.copc.laz");
 const TERRAIN_URLS = {
-  terrain: "/tonga/terrain.pmtiles",
-  ortho: "/tonga/ortho.pmtiles",
-  buildings: "/tonga/buildings.geojson",
-  vegetation: "/tonga/vegetation.geojson",
+  terrain: withBase("/data/tonga/terrain.pmtiles"),
+  ortho: withBase("/data/tonga/ortho.pmtiles"),
+  buildings: withBase("/data/tonga/buildings.geojson"),
+  vegetation: withBase("/data/tonga/vegetation.geojson"),
 };
 
 export default function CesiumViewer() {

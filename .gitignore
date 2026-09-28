@@ -55,3 +55,5 @@ next-env.d.ts
 
 # product build intermediates (scripts/build_products.py)
 /.products-build
+# ...but keep the Docker env template
+!docker/.env.example

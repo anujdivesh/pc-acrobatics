@@ -8,7 +8,7 @@ export const metadata: Metadata = {
 
 // The map lives here, not in the pages, so it stays mounted while moving between
 // products: only the layers change, Cesium is not rebuilt.
-export default function ProductsLayout({ children }: LayoutProps<"/pointcloud-products">) {
+export default function ProductsLayout({ children }: LayoutProps<"/products">) {
   return (
     <>
       <ProductsApp />

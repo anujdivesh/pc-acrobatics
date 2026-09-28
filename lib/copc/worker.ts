@@ -16,6 +16,9 @@ const post = (msg: WorkerResponse, transfer: Transferable[] = []) =>
 /** Range-request getter. Kept local so relative URLs work (copc's built-in needs an absolute one). */
 function httpGetter(url: string): Getter {
   return async (begin, end) => {
+    // Empty octree nodes ask for zero bytes. `bytes=0--1` is not a valid range,
+    // and a plain static server answers it with the whole file.
+    if (end <= begin) return new Uint8Array(0);
     const res = await fetch(url, { headers: { Range: `bytes=${begin}-${end - 1}` } });
     if (!res.ok) throw new Error(`HTTP ${res.status} fetching bytes ${begin}-${end - 1}`);
     return new Uint8Array(await res.arrayBuffer());

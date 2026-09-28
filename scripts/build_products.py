@@ -53,7 +53,7 @@ ROOT = Path(__file__).resolve().parent.parent
 NODATA = -9999.0
 RES = 1.0            # analysis grid, metres
 DISPLAY_RES = 2.0    # map overlays, metres
-URL_BASE = "/tonga/products"
+URL_BASE = "/data/tonga/products"  # served by app/data/[...path]/route.ts
 
 
 def log(msg: str) -> None:

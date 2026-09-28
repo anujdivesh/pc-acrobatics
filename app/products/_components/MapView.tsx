@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import type * as CesiumType from "cesium";
 import { loadCesium, type Cesium } from "@/lib/cesium/loadCesium";
 import { openPmtilesImagery } from "@/lib/terrain/pmtilesImagery";
+import { withBase } from "@/lib/basePath";
 import type { MapLayers, Overlay, Vector } from "./types";
 
 type Props = {
@@ -51,7 +52,7 @@ export default function MapView({ bounds, layers, showOrtho }: Props) {
         infoBox: false, selectionIndicator: false,
       });
       viewer.scene.globe.depthTestAgainstTerrain = false;
-      const ortho = await openPmtilesImagery(C, "/tonga/ortho.pmtiles", "LiDAR orthophoto").catch(() => null);
+      const ortho = await openPmtilesImagery(C, withBase("/data/tonga/ortho.pmtiles"), "LiDAR orthophoto").catch(() => null);
       if (cancelled || viewer.isDestroyed()) return;
       if (ortho) orthoRef.current = viewer.imageryLayers.addImageryProvider(ortho.provider);
 
@@ -89,7 +90,7 @@ export default function MapView({ bounds, layers, showOrtho }: Props) {
       if (!layer) {
         const [w, s, e, n] = o.rect;
         layer = C.ImageryLayer.fromProviderAsync(
-          C.SingleTileImageryProvider.fromUrl(o.url, { rectangle: C.Rectangle.fromDegrees(w, s, e, n) }), {});
+          C.SingleTileImageryProvider.fromUrl(withBase(o.url), { rectangle: C.Rectangle.fromDegrees(w, s, e, n) }), {});
         viewer.imageryLayers.add(layer);
         overlaysRef.current.set(o.id, layer);
       }
@@ -115,7 +116,7 @@ export default function MapView({ bounds, layers, showOrtho }: Props) {
 }
 
 async function loadVector(C: Cesium, viewer: CesiumType.Viewer, v: Vector): Promise<VectorHandle> {
-  const fc = await (await fetch(v.url)).json();
+  const fc = await (await fetch(withBase(v.url))).json();
   if (v.style.point) {
     const points = viewer.scene.primitives.add(new C.PointPrimitiveCollection()) as CesiumType.PointPrimitiveCollection;
     const color = C.Color.fromCssColorString(v.style.point);

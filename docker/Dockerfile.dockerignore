@@ -1,0 +1,29 @@
+# Build context is the project root; this file sits beside the Dockerfile so
+# BuildKit uses it for this build only.
+
+# Survey data and anything derived from it never goes into the image.
+public/tonga
+backups
+.terrain-build
+.products-build
+.ortho-build
+**/*.laz
+**/*.copc.laz
+**/*.pmtiles
+**/*.geojson
+
+# Secrets
+.env
+.env.*
+docker/.env
+
+# Rebuilt inside the image
+node_modules
+.next
+public/cesium
+public/laz-perf.wasm
+
+# Not needed to build
+.git
+docs
+*.md

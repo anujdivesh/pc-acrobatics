@@ -1,5 +1,7 @@
 import type * as CesiumType from "cesium";
 
+import { withBase } from "@/lib/basePath";
+
 export type Cesium = typeof CesiumType;
 
 declare global {
@@ -9,7 +11,7 @@ declare global {
   }
 }
 
-const CESIUM_BASE_URL = "/cesium";
+const CESIUM_BASE_URL = withBase("/cesium");
 
 let cesiumPromise: Promise<Cesium> | undefined;
 

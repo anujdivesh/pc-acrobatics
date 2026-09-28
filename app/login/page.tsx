@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
-import { safeNext } from "@/lib/auth/productsAuth";
+import { safeNext } from "@/lib/auth/site";
+import { withBase } from "@/lib/basePath";
 
-export const metadata: Metadata = { title: "Sign in · Point cloud products" };
+export const metadata: Metadata = { title: "Sign in · Pacific Ocean Portal" };
 
-export default async function ProductsLogin({ searchParams }: PageProps<"/products-login">) {
+export default async function Login({ searchParams }: PageProps<"/login">) {
   const params = await searchParams;
   const next = safeNext(params.next);
   const error = params.error === "1";
@@ -11,12 +12,11 @@ export default async function ProductsLogin({ searchParams }: PageProps<"/produc
   return (
     <main className="fixed inset-0 flex items-center justify-center bg-slate-900 p-4 font-sans">
       <form
-        action="/api/products-login"
+        action={withBase("/api/login")}
         method="post"
         className="w-full max-w-xs rounded-xl border border-zinc-300 bg-white p-5 shadow-lg"
       >
-        <p className="text-sm font-semibold text-sky-600">Pacific Ocean Portal</p>
-        <h1 className="mb-4 text-base font-semibold text-zinc-900">Point cloud products</h1>
+        <h1 className="mb-4 text-base font-semibold text-sky-600">Pacific Ocean Portal</h1>
         <input type="hidden" name="next" value={next} />
         <label className="block text-xs text-zinc-600">
           Password

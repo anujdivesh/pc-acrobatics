@@ -1,0 +1,50 @@
+# Pacific Ocean Portal
+#
+#   cp docker/.env.example docker/.env      # then edit it
+#   docker compose -f docker/docker-compose.yml up -d --build
+#
+# The survey data stays on the host and is mounted read-only; the image never
+# contains it. Only the app's guarded /data route can read it.
+
+name: pacific-ocean-portal
+
+services:
+  web:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      args:
+        NEXT_PUBLIC_CESIUM_ION_TOKEN: ${NEXT_PUBLIC_CESIUM_ION_TOKEN:?set NEXT_PUBLIC_CESIUM_ION_TOKEN in docker/.env}
+    image: pacific-ocean-portal:latest
+    restart: unless-stopped
+    ports:
+      # Bind to 127.0.0.1 when a reverse proxy (with HTTPS) sits in front.
+      - "${APP_BIND:-0.0.0.0}:${APP_PORT:-3000}:3000"
+    environment:
+      APP_PASSWORD: ${APP_PASSWORD:?set APP_PASSWORD in docker/.env}
+      AUTH_SECRET: ${AUTH_SECRET:?set AUTH_SECRET in docker/.env}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}      # true once served over HTTPS
+      DATA_DIR: /data
+      DATA_MAX_RANGE_MB: ${DATA_MAX_RANGE_MB:-16}  # largest piece of a file per request
+      DATA_RATE_MB: ${DATA_RATE_MB:-600}           # download budget per session...
+      DATA_RATE_WINDOW_S: ${DATA_RATE_WINDOW_S:-900} # ...per this many seconds
+    volumes:
+      # Host folder with topobathy.copc.laz, terrain.pmtiles, ortho.pmtiles,
+      # buildings.geojson, vegetation.geojson and products/.
+      - ${DATA_PATH:-../public/tonga}:/data/tonga:ro
+    # Hardening: nothing in the container is writable except two small tmpfs
+    # mounts, no Linux capabilities, no privilege escalation, bounded processes.
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /app/.next/cache:uid=1001,gid=1001,mode=0700
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 256
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:3000/pointcloud/login"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
