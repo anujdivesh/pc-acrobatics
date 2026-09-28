@@ -13,6 +13,12 @@ export type TerrainSettings = {
   showBuildings: boolean;
   showVegetation: boolean;
   vegetationTiers: Record<VegetationClass, boolean>;
+  /** Depth / elevation colours on the terrain, relative to the water level. */
+  showRelief: boolean;
+  reliefAlpha: number;
+  showContours: boolean;
+  /** Metres between contour lines. */
+  contourSpacing: number;
 };
 
 export type TerrainStatus = {
@@ -23,6 +29,8 @@ export type TerrainStatus = {
   sampleHeight?: number;
   buildingCount?: number;
   vegetationCounts?: Record<number, number>;
+  /** Height the relief counts from (the measured water level). */
+  seaLevel?: number;
 };
 
 const DEFAULTS: TerrainSettings = {
@@ -32,6 +40,10 @@ const DEFAULTS: TerrainSettings = {
   showBuildings: true,
   showVegetation: true,
   vegetationTiers: { 3: true, 4: true, 5: true },
+  showRelief: false,
+  reliefAlpha: 0.85,
+  showContours: false,
+  contourSpacing: 2,
 };
 
 type Ctx = {

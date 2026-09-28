@@ -1,7 +1,35 @@
 "use client";
 
 import { useTerrainLayer } from "./TerrainProvider";
+import LayerRadio from "./LayerRadio";
 import { VEGETATION_TIERS } from "@/lib/terrain/vegetation";
+import { RELIEF_STOPS } from "@/lib/terrain/relief";
+
+const CONTOUR_SPACINGS = [0.5, 1, 2, 5, 10];
+
+/** The relief ramp, one equal-width segment per stop interval, labelled at the stops. */
+function ReliefLegend() {
+  // The waterline is a colour break (-0.01 -> 0), not a segment of its own: the
+  // segment ending at 0 fades to the water side's colour, the next starts on land's.
+  const waterEdge = RELIEF_STOPS.find(([v]) => v === -0.01)![1];
+  const stops = RELIEF_STOPS.filter(([v]) => v !== -0.01);
+  return (
+    <div className="pl-5">
+      <div className="flex h-2.5 overflow-hidden rounded-sm">
+        {stops.slice(0, -1).map(([v, from], i) => {
+          const [nextV, nextC] = stops[i + 1];
+          const to = nextV === 0 ? waterEdge : nextC;
+          return <div key={v} className="flex-1" style={{ background: `linear-gradient(to right, ${from}, ${to})` }} />;
+        })}
+      </div>
+      <div className="mt-0.5 flex justify-between text-[10px] tabular-nums text-zinc-500">
+        {stops.map(([v]) => (
+          <span key={v}>{v > 0 ? `+${v}` : v}</span>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 function Row({ label, value }: { label: string; value: string }) {
   return (
@@ -34,16 +62,11 @@ export default function TerrainPanel() {
 
   return (
     <div className="space-y-3">
-      <Check
-        checked={settings.enabled}
-        onChange={(v) => update({ enabled: v })}
-        label="Tonga bare earth and seabed"
-      />
+      <LayerRadio layer="terrain" label="Mango Island 3D Terrain" />
 
       {!settings.enabled ? (
         <p className="text-zinc-500">
-          Quantized-mesh terrain gridded from the survey&apos;s ground and
-          bathymetric-bottom classes, with the 10 cm orthophoto draped over it.
+         3D Terrain gridded from TopoBathy, with the 10 cm orthophoto overlay.
         </p>
       ) : status.error ? (
         <p className="text-red-600">{status.error}</p>
@@ -51,41 +74,64 @@ export default function TerrainPanel() {
         <p className="text-zinc-500">Loading terrain…</p>
       ) : (
         <>
-          <div className="space-y-1">
-            <Row label="Source" value={`${status.meta.resolution} m DEM`} />
-            <Row label="Scale" value="1:1, true heights" />
-            <Row
-              label="Height here"
-              value={status.sampleHeight === undefined ? "—" : `${status.sampleHeight.toFixed(1)} m`}
-            />
-            {status.ortho && (
-              <Row label="Orthophoto" value={`${status.ortho.sourceResolution} m, z${status.ortho.maxzoom}`} />
-            )}
-          </div>
+         
 
           <div className="space-y-1.5">
+            <div className="flex items-center gap-2">
+              <Check
+                checked={settings.showOrtho}
+                onChange={(v) => update({ showOrtho: v })}
+                label="Orthophoto"
+              />
+              {settings.showOrtho && (
+                <>
+                  <input
+                    type="range" min={0} max={1} step={0.05}
+                    value={settings.orthoAlpha}
+                    onChange={(e) => update({ orthoAlpha: Number(e.target.value) })}
+                    aria-label="Orthophoto opacity"
+                    className="min-w-0 flex-1 accent-blue-600"
+                  />
+                  <span className="w-8 text-right tabular-nums text-zinc-500">
+                    {Math.round(settings.orthoAlpha * 100)}%
+                  </span>
+                </>
+              )}
+            </div>
             <Check
-              checked={settings.showOrtho}
-              onChange={(v) => update({ showOrtho: v })}
-              label="Orthophoto"
+              checked={settings.showRelief}
+              // Trees and buildings would hide the colours: switching them on clears both.
+              onChange={(v) => update(v ? { showRelief: true, showVegetation: false, showBuildings: false } : { showRelief: false })}
+              label="Depth and elevation colours"
             />
-            {settings.showOrtho && (
-              <label className="block pl-5">
-                <span className="text-zinc-500">
-                  Opacity — {Math.round(settings.orthoAlpha * 100)}%
-                </span>
-                <input
-                  type="range" min={0} max={1} step={0.05}
-                  value={settings.orthoAlpha}
-                  onChange={(e) => update({ orthoAlpha: Number(e.target.value) })}
-                  className="w-full accent-blue-600"
-                />
-              </label>
-            )}
+            
+            <div className="flex items-center gap-2">
+              <Check
+                checked={settings.showContours}
+                onChange={(v) => update(v ? { showContours: true, showVegetation: false, showBuildings: false } : { showContours: false })}
+                label="Contours"
+              />
+              {settings.showContours && (
+                <label className="flex items-center gap-1.5 text-zinc-500">
+                  every
+                  <select
+                    value={settings.contourSpacing}
+                    onChange={(e) => update({ contourSpacing: Number(e.target.value) })}
+                    className="rounded border border-zinc-300 bg-white px-1 py-0.5 text-zinc-800"
+                    aria-label="Contour spacing"
+                  >
+                    {CONTOUR_SPACINGS.map((m) => (
+                      <option key={m} value={m}>{m} m</option>
+                    ))}
+                  </select>
+                </label>
+              )}
+            </div>
+          
             <Check
               checked={settings.showBuildings}
               onChange={(v) => update({ showBuildings: v })}
-              label={`Buildings${status.buildingCount ? ` (${status.buildingCount})` : ""}`}
+              label="Buildings"
             />
             <Check
               checked={settings.showVegetation}
@@ -111,7 +157,7 @@ export default function TerrainPanel() {
                         className="h-3 w-3 accent-blue-600"
                       />
                       <span className="truncate text-zinc-600">
-                        {t.label} ({veg[t.cls].toLocaleString()})
+                        {t.label}
                       </span>
                     </label>
                   </li>

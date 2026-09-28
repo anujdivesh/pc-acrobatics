@@ -1,10 +1,11 @@
 "use client";
 
 import { usePointCloud } from "./PointCloudProvider";
+import LayerRadio from "./LayerRadio";
 import { COLOR_MODE_LABELS, classLabel, rampCss } from "@/lib/copc/palette";
 import type { ColorMode } from "@/lib/copc/types";
 
-const MODES: ColorMode[] = ["elevation", "classification", "intensity", "rgb"];
+const MODES: ColorMode[] = ["elevation", "classification", "rgb"];
 
 function Row({ label, value }: { label: string; value: string }) {
   return (
@@ -25,20 +26,11 @@ export default function PointCloudPanel() {
 
   return (
     <div className="space-y-3">
-      <label className="flex items-center gap-2">
-        <input
-          type="checkbox"
-          checked={settings.enabled}
-          onChange={(e) => update({ enabled: e.target.checked })}
-          className="h-3.5 w-3.5 accent-blue-600"
-        />
-        <span className="text-zinc-800">Tonga topo-bathy</span>
-      </label>
+      <LayerRadio layer="pointcloud" label="Mango Island topo-bathy" />
 
       {!settings.enabled ? (
         <p className="text-zinc-500">
-          263 million classified returns, streamed from a single COPC file over
-          HTTP range requests.
+          Classified COPC file
         </p>
       ) : status.error ? (
         <p className="text-red-600">{status.error}</p>
@@ -46,12 +38,7 @@ export default function PointCloudPanel() {
         <p className="text-zinc-500">Reading header…</p>
       ) : (
         <>
-          <div className="space-y-1">
-            <Row label="In file" value={meta.pointCount.toLocaleString()} />
-            <Row label="Drawn" value={status.points.toLocaleString()} />
-            <Row label="Nodes" value={`${status.loaded}${status.loading ? ` (+${status.loading})` : ""}`} />
-            <Row label="CRS" value={meta.crsLabel} />
-          </div>
+          
 
           <div>
             <div className="mb-1 text-zinc-500">Colour</div>
@@ -92,17 +79,6 @@ export default function PointCloudPanel() {
             />
           </label>
 
-          <label className="block">
-            <span className="text-zinc-500">
-              Budget — {(settings.budget / 1000).toFixed(0)}k points
-            </span>
-            <input
-              type="range" min={50_000} max={1_000_000} step={50_000}
-              value={settings.budget}
-              onChange={(e) => update({ budget: Number(e.target.value) })}
-              className="w-full accent-blue-600"
-            />
-          </label>
 
           {classes.length > 0 && (
             <div>

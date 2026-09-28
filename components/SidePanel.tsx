@@ -53,17 +53,39 @@ function Chevron({ className }: { className?: string }) {
 }
 
 export default function SidePanel() {
+  // Desktop: the panel slides out from the left edge. Mobile: it is a bottom
+  // sheet, collapsed to its handle until asked for, so the map keeps the screen.
   const [open, setOpen] = useState(true);
+  const [sheetOpen, setSheetOpen] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(ITEMS[0].id);
 
   return (
     <aside
-      className={`absolute left-0 top-1/2 z-10 flex -translate-y-1/2 items-center font-sans transition-transform duration-300 ${
-        open ? "translate-x-0" : "-translate-x-[calc(100%-2.25rem)]"
+      className={`fixed inset-x-0 bottom-0 z-20 font-sans md:absolute md:inset-x-auto md:bottom-auto md:left-0 md:top-1/2 md:z-10 md:flex md:-translate-y-1/2 md:items-center md:transition-transform md:duration-300 ${
+        open ? "md:translate-x-0" : "md:-translate-x-[calc(100%-2.25rem)]"
       }`}
     >
-      <nav className="w-72 max-w-[calc(100vw-3rem)] rounded-r-xl border border-l-0 border-zinc-300 bg-white/95 py-2 shadow-lg backdrop-blur">
-        <ul>
+      {/* Mobile only: the sheet's header, with the same Hide / Show button as the products page. */}
+      <div className="flex items-center gap-2 rounded-t-xl border border-b-0 border-zinc-300 bg-white/95 px-4 py-2.5 shadow-[0_-4px_12px_rgba(0,0,0,0.12)] backdrop-blur md:hidden">
+        <span className="text-sm font-semibold text-zinc-800">Layers</span>
+        <button
+          type="button"
+          onClick={() => setSheetOpen((o) => !o)}
+          aria-expanded={sheetOpen}
+          aria-controls="layer-panel"
+          className="ml-auto shrink-0 rounded-md border border-zinc-300 px-2 py-1 text-[11px] text-zinc-700"
+        >
+          {sheetOpen ? "Hide" : "Show"}
+        </button>
+      </div>
+
+      <nav
+        id="layer-panel"
+        className={`overflow-y-auto border-x border-zinc-300 bg-white/95 backdrop-blur transition-[max-height] duration-300 md:max-h-none md:w-72 md:overflow-visible md:rounded-r-xl md:border md:border-l-0 md:shadow-lg ${
+          sheetOpen ? "max-h-[40vh]" : "max-h-0"
+        }`}
+      >
+        <ul className="py-2">
           {ITEMS.map((item) => {
             const isOpen = expanded === item.id;
             return (
@@ -99,11 +121,12 @@ export default function SidePanel() {
         </ul>
       </nav>
 
+      {/* Desktop only: the tab that slides the panel away. */}
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
         aria-label={open ? "Collapse panel" : "Expand panel"}
-        className="-ml-px flex h-12 w-9 items-center justify-center rounded-r-xl border border-l-0 border-zinc-300 bg-white/95 text-zinc-900 shadow-lg"
+        className="-ml-px hidden h-12 w-9 items-center justify-center rounded-r-xl border border-l-0 border-zinc-300 bg-white/95 text-zinc-900 shadow-lg md:flex"
       >
         <Chevron className={`h-5 w-5 transition-transform duration-300 ${open ? "" : "rotate-180"}`} />
       </button>

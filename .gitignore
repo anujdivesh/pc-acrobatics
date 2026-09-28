@@ -43,3 +43,15 @@ next-env.d.ts
 # public assets are never committed: Cesium and laz-perf files are copied in from
 # node_modules by scripts/, and the survey data is far too large for git
 /public
+
+# local backups of generated data
+/backups
+
+# terrain build intermediates (scripts/build_cesium_terrain.py)
+/.terrain-build
+
+# orthophoto build intermediates (scripts/build_ortho_pmtiles.py)
+/.ortho-build
+
+# product build intermediates (scripts/build_products.py)
+/.products-build

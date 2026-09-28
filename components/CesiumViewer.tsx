@@ -9,52 +9,15 @@ import { useTerrainLayer } from "./TerrainProvider";
 import { useMap } from "./MapProvider";
 import { loadTerrainLayer, type TerrainLayerHandle } from "@/lib/terrain/terrainLayer";
 import { lonLatBounds } from "@/lib/terrain/types";
+import { loadCesium, type Cesium } from "@/lib/cesium/loadCesium";
 
-type Cesium = typeof CesiumType;
-
-declare global {
-  interface Window {
-    CESIUM_BASE_URL: string;
-    Cesium?: Cesium;
-  }
-}
-
-const CESIUM_BASE_URL = "/cesium";
 const COPC_URL = "/tonga/topobathy.copc.laz";
 const TERRAIN_URLS = {
-  terrain: "/tonga/cesium-terrain",
-  meta: "/tonga/terrain/meta.json",
-  ortho: "/tonga/ortho",
-  orthoMeta: "/tonga/ortho/meta.json",
+  terrain: "/tonga/terrain.pmtiles",
+  ortho: "/tonga/ortho.pmtiles",
   buildings: "/tonga/buildings.geojson",
   vegetation: "/tonga/vegetation.geojson",
 };
-
-let cesiumPromise: Promise<Cesium> | undefined;
-
-// Load the prebuilt Cesium bundle from public/ once. Bundling the npm package
-// through Turbopack breaks binary data inlined in Cesium's modules.
-function loadCesium(): Promise<Cesium> {
-  cesiumPromise ??= new Promise((resolve, reject) => {
-    if (window.Cesium) return resolve(window.Cesium);
-    window.CESIUM_BASE_URL = CESIUM_BASE_URL;
-
-    const css = document.createElement("link");
-    css.rel = "stylesheet";
-    css.href = `${CESIUM_BASE_URL}/Widgets/widgets.css`;
-    document.head.appendChild(css);
-
-    const script = document.createElement("script");
-    script.src = `${CESIUM_BASE_URL}/Cesium.js`;
-    script.onload = () => resolve(window.Cesium!);
-    script.onerror = () => {
-      cesiumPromise = undefined;
-      reject(new Error(`Failed to load ${script.src}`));
-    };
-    document.head.appendChild(script);
-  });
-  return cesiumPromise;
-}
 
 export default function CesiumViewer() {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -71,16 +34,27 @@ export default function CesiumViewer() {
   // The worker only runs while the layer is on.
   const { nodes, status, setView } = useCopcSource(settings.enabled ? COPC_URL : "");
   const rendererRef = useRef<PointCloudRenderer | null>(null);
+  // The globe's own terrain, which every overlay layer restores when it goes.
+  const baseTerrainRef = useRef<CesiumType.TerrainProvider | null>(null);
   const { setMap } = useMap();
 
   useEffect(() => {
     let created: CesiumType.Viewer | undefined;
     let cancelled = false;
 
-    loadCesium().then((Cesium) => {
+    loadCesium().then(async (Cesium) => {
       if (cancelled || !containerRef.current) return;
 
       Cesium.Ion.defaultAccessToken = process.env.NEXT_PUBLIC_CESIUM_ION_TOKEN ?? "";
+
+      // Resolved before the viewer exists, not handed over as a pending
+      // `Terrain`: that assigns the provider whenever it finishes loading, which
+      // can land after the Tonga terrain layer is switched on and silently
+      // replace it with world terrain.
+      const worldTerrain = await Cesium.createWorldTerrainAsync()
+        .catch(() => new Cesium.EllipsoidTerrainProvider());
+      if (cancelled || !containerRef.current) return;
+      baseTerrainRef.current = worldTerrain;
 
       created = new Cesium.Viewer(containerRef.current, {
         // Bing Maps aerial with labels, served through Cesium ion.
@@ -89,15 +63,21 @@ export default function CesiumViewer() {
             style: Cesium.IonWorldImageryStyle.AERIAL_WITH_LABELS,
           }),
         ),
-        terrain: Cesium.Terrain.fromWorldTerrain(),
-        baseLayerPicker: true,
-        geocoder: Cesium.IonGeocodeProviderType.DEFAULT,
+        terrainProvider: worldTerrain,
+        // Cesium's own widgets are replaced by the app's tools and navigation
+        // controls. The credit line stays: Cesium ion and Bing require it.
+        baseLayerPicker: false,
+        geocoder: false,
+        homeButton: false,
+        sceneModePicker: false,
+        navigationHelpButton: false,
+        fullscreenButton: false,
         timeline: false,
         animation: false,
       });
       setCesium(Cesium);
       setViewer(created);
-    }, console.error);
+    }).catch(console.error);
 
     return () => {
       cancelled = true;
@@ -230,8 +210,12 @@ export default function CesiumViewer() {
     if (!cesium || !viewer || !terrainSettings.enabled) return;
     let cancelled = false;
     let handle: TerrainLayerHandle | null = null;
+    const controller = new AbortController();
 
-    loadTerrainLayer(cesium, viewer, TERRAIN_URLS).then(
+    loadTerrainLayer(cesium, viewer, TERRAIN_URLS, {
+      baseTerrain: baseTerrainRef.current ?? viewer.terrainProvider,
+      signal: controller.signal,
+    }).then(
       (h) => {
         if (cancelled) return h.destroy();
         handle = h;
@@ -242,15 +226,20 @@ export default function CesiumViewer() {
           sampleHeight: h.sampleHeight,
           buildingCount: h.buildingCount,
           vegetationCounts: h.vegetationCounts,
+          seaLevel: h.seaLevel,
         });
       },
       (err: unknown) => {
-        if (!cancelled) setTerrainStatus({ error: String(err) });
+        // A cancelled load has already undone itself; that is not an error.
+        if (!cancelled && (err as Error)?.name !== "AbortError") {
+          setTerrainStatus({ error: String(err) });
+        }
       },
     );
 
     return () => {
       cancelled = true;
+      controller.abort();
       terrainRef.current = null;
       handle?.destroy();
     };
@@ -270,6 +259,18 @@ export default function CesiumViewer() {
       terrainSettings.vegetationTiers,
     );
   }, [terrainSettings.showVegetation, terrainSettings.vegetationTiers]);
+
+  // Also keyed on the terrain having loaded, so settings chosen while it was
+  // still loading are applied the moment it arrives.
+  useEffect(() => {
+    terrainRef.current?.setRelief({
+      colours: terrainSettings.showRelief,
+      colourAlpha: terrainSettings.reliefAlpha,
+      contours: terrainSettings.showContours,
+      spacing: terrainSettings.contourSpacing,
+    });
+  }, [terrainStatus.meta, terrainSettings.showRelief, terrainSettings.reliefAlpha,
+    terrainSettings.showContours, terrainSettings.contourSpacing]);
 
   // Frame the survey once the terrain is up, and expose it to the panel. Keyed
   // off the reported metadata, not the handle ref: the load is asynchronous, so
