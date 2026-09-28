@@ -1,5 +1,5 @@
 import type { NextRequest } from "next/server";
-import { LOGIN, SESSION_COOKIE, SITE_PASSWORD, safeNext, sessionToken } from "@/lib/auth/site";
+import { HOME, LOGIN, SESSION_COOKIE, authEnabled, checkCredentials, safeNext, sessionToken } from "@/lib/auth/site";
 import { BASE_PATH } from "@/lib/basePath";
 
 // A plain Response with a relative Location. Behind Docker or a reverse proxy
@@ -12,10 +12,12 @@ function redirect(location: string, cookie?: string) {
 }
 
 export async function POST(request: NextRequest) {
+  if (!authEnabled()) return redirect(HOME);
+
   const form = await request.formData();
   const next = safeNext(form.get("next"));
 
-  if (form.get("password") !== SITE_PASSWORD) {
+  if (!(await checkCredentials(form.get("username"), form.get("password")))) {
     return redirect(`${LOGIN}?${new URLSearchParams({ error: "1", next })}`);
   }
 

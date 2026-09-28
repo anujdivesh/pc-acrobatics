@@ -10,7 +10,7 @@ import { SESSION_COOKIE, isSignedIn } from "@/lib/auth/site";
  *
  * Nothing that renders in a browser can be made impossible to copy, but this
  * makes the raw files hard to take:
- *   - product files need a signed-in session (the viewer's data is public);
+ *   - a signed-in session, whenever a login is configured (always in Docker);
  *   - requests must come from this app's own pages (Sec-Fetch-Site), so the
  *     address typed into a browser, a hotlink or a bare script gets nothing;
  *   - the big files (COPC, PMTiles) are only ever served in pieces, never whole;
@@ -24,9 +24,6 @@ const DATA_DIR = path.resolve(process.env.DATA_DIR || path.join(process.cwd(), "
 const MAX_RANGE = Number(process.env.DATA_MAX_RANGE_MB || 16) * 1024 * 1024;
 const BUDGET = Number(process.env.DATA_RATE_MB || 600) * 1024 * 1024;
 const WINDOW_MS = Number(process.env.DATA_RATE_WINDOW_S || 900) * 1000;
-
-/** Only these need a session; the rest is what the public viewer loads. */
-const PROTECTED = ["tonga/products/"];
 
 const TYPES: Record<string, { type: string; rangeOnly: boolean }> = {
   ".laz": { type: "application/octet-stream", rangeOnly: true },
@@ -74,15 +71,14 @@ function parseRange(header: string, size: number): [number, number] | null {
 }
 
 export async function GET(request: NextRequest, ctx: RouteContext<"/data/[...path]">) {
-  // Resolve first and judge the real path, so ".." can't dodge the checks below.
+  // Resolve first, so ".." can't reach outside DATA_DIR.
   const { path: parts } = await ctx.params;
   const file = path.resolve(DATA_DIR, ...parts);
   if (!file.startsWith(DATA_DIR + path.sep)) return deny(404, "Not found.");
-  const relative = path.relative(DATA_DIR, file).split(path.sep).join("/");
 
   const session = request.cookies.get(SESSION_COOKIE)?.value;
   const signedIn = await isSignedIn(session);
-  if (!signedIn && PROTECTED.some((p) => relative.startsWith(p))) return deny(401, "Sign in first.");
+  if (!signedIn) return deny(401, "Sign in first.");
 
   // Browsers mark every request with where it came from. Only this app's pages
   // may load data; typing the address or linking from elsewhere does not work.

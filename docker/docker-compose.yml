@@ -18,12 +18,13 @@ services:
     image: pacific-ocean-portal:latest
     restart: unless-stopped
     ports:
-      # Bind to 127.0.0.1 when a reverse proxy (with HTTPS) sits in front.
-      - "${APP_BIND:-0.0.0.0}:${APP_PORT:-3000}:3000"
+      # Host 127.0.0.1:3120 -> container 3000; nginx proxies /pointcloud here.
+      - "${APP_BIND:-127.0.0.1}:${APP_PORT:-3120}:3000"
     environment:
+      APP_USERNAME: ${APP_USERNAME:?set APP_USERNAME in docker/.env}
       APP_PASSWORD: ${APP_PASSWORD:?set APP_PASSWORD in docker/.env}
       AUTH_SECRET: ${AUTH_SECRET:?set AUTH_SECRET in docker/.env}
-      COOKIE_SECURE: ${COOKIE_SECURE:-false}      # true once served over HTTPS
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}       # served over HTTPS by nginx
       DATA_DIR: /data
       DATA_MAX_RANGE_MB: ${DATA_MAX_RANGE_MB:-16}  # largest piece of a file per request
       DATA_RATE_MB: ${DATA_RATE_MB:-600}           # download budget per session...
