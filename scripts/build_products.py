@@ -9,7 +9,7 @@ Every height is relative to the water level measured in the survey (median of th
 water-surface returns), so 0 is the sea surface at survey time -- not a tidal datum.
 
 Products: hypsometry, bathymetry,
-reef rugosity and slope, canopy height and trees, tsunami safe zones, drainage.
+reef rugosity and slope, canopy height and trees, tsunami safe zones.
 
 Run in the `pcl` environment:
 
@@ -21,7 +21,6 @@ Grids are cached in .products-build/; `--regrid` rebuilds them from the COPC.
 from __future__ import annotations
 
 import argparse
-import heapq
 import json
 import math
 import os
@@ -40,7 +39,7 @@ from osgeo import gdal
 from PIL import Image
 from pyproj import Transformer
 from scipy import ndimage
-from shapely.geometry import LineString, Point, Polygon, mapping
+from shapely.geometry import LineString, Point, mapping
 from shapely.ops import transform as shp_transform
 from skimage import feature, measure, morphology, segmentation
 
@@ -408,106 +407,6 @@ def tsunami(g: Grid, W: Writer, ground, land, thresholds):
     }
 
 
-def drainage(g: Grid, W: Writer, ground_filled, land):
-    # 2 m, land only: the sea is the outlet for everything.
-    f = 2
-    h, w = land.shape
-    H, Wd = h // f, w // f
-    dem = np.nanmean(ground_filled[:H * f, :Wd * f].reshape(H, f, Wd, f), axis=(1, 3))
-    lnd = land[:H * f, :Wd * f].reshape(H, f, Wd, f).mean(axis=(1, 3)) > 0.5
-    lnd &= ~np.isnan(dem)
-    rows, cols = np.nonzero(lnd)
-    r0, r1, c0, c1 = max(rows.min() - 1, 0), min(rows.max() + 2, H), max(cols.min() - 1, 0), min(cols.max() + 2, Wd)
-    dem, lnd = dem[r0:r1, c0:c1].astype(np.float64), lnd[r0:r1, c0:c1]
-    sh = dem.shape
-    filled = np.where(lnd, np.inf, -np.inf)
-    # Priority flood from every land cell that touches the sea, with a tiny
-    # gradient across flats so every cell drains somewhere.
-    edge = lnd & ndimage.binary_dilation(~lnd)
-    heap = [(dem[r, c], r, c) for r, c in zip(*np.nonzero(edge))]
-    heapq.heapify(heap)
-    for z, r, c in heap:
-        filled[r, c] = z
-    eps = 1e-4
-    nbrs = [(-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 1), (1, -1), (1, 0), (1, 1)]
-    done = ~lnd | edge
-    while heap:
-        z, r, c = heapq.heappop(heap)
-        for dr, dc in nbrs:
-            rr, cc = r + dr, c + dc
-            if 0 <= rr < sh[0] and 0 <= cc < sh[1] and not done[rr, cc]:
-                done[rr, cc] = True
-                nz = max(dem[rr, cc], z + eps)
-                filled[rr, cc] = nz
-                heapq.heappush(heap, (nz, rr, cc))
-    depth = np.where(lnd, filled - dem, 0.0)
-    pits = depth > 0.15
-    labels, n = ndimage.label(pits)
-    idx = np.arange(1, n + 1)
-    vol = ndimage.sum(depth, labels, idx) * f * f
-    maxd = ndimage.maximum(depth, labels, idx)
-    keep = {int(i): (float(v), float(m)) for i, v, m in zip(idx, vol, maxd) if v >= 10}
-    sub_grid = Grid(g.x0 + c0 * f * g.res, g.y1 - r0 * f * g.res, sh[1], sh[0], g.res * f, g.wkt)
-    polys = []
-    for lab, (v, m) in keep.items():
-        for cnt in measure.find_contours(np.pad(labels == lab, 1).astype(np.float32), 0.5):
-            if len(cnt) < 4:
-                continue
-            x, y = sub_grid.xy(cnt[:, 0] - 1, cnt[:, 1] - 1)
-            poly = Polygon(np.column_stack([x, y])).buffer(0)
-            if poly.area >= 8:
-                polys.append((poly.simplify(1.0), {"volume_m3": round(v), "max_depth_m": round(m, 2)}))
-    # D8 flow on the filled surface, accumulated from the top down.
-    fz = np.where(lnd, filled, -1e9)
-    best = np.zeros(sh, np.float64)
-    recv = np.full(sh, -1, np.int64)
-    flat_idx = np.arange(fz.size).reshape(sh)
-    for dr, dc in nbrs:
-        shifted = np.full(sh, np.inf)
-        ys = slice(max(dr, 0), sh[0] + min(dr, 0))
-        yd = slice(max(-dr, 0), sh[0] + min(-dr, 0))
-        xs_ = slice(max(dc, 0), sh[1] + min(dc, 0))
-        xd = slice(max(-dc, 0), sh[1] + min(-dc, 0))
-        shifted[yd, xd] = fz[ys, xs_]
-        nidx = np.full(sh, -1, np.int64)
-        nidx[yd, xd] = flat_idx[ys, xs_]
-        drop = (fz - shifted) / math.hypot(dr, dc)
-        better = drop > best
-        best = np.where(better, drop, best)
-        recv = np.where(better, nidx, recv)
-    acc = np.where(lnd, 1.0, 0.0).ravel()
-    order = np.argsort(-fz, axis=None)
-    rv = recv.ravel()
-    accl = acc.tolist()
-    for i in order.tolist():
-        j = rv[i]
-        if j >= 0:
-            accl[j] += accl[i]
-    area = np.array(accl).reshape(sh) * (f * g.res) ** 2
-    streams = lnd & (area >= 5000)
-    rgba = np.zeros(sh + (4,), np.uint8)
-    strength = np.clip((np.log10(np.maximum(area, 1)) - 3.7) / 2.0, 0, 1)
-    rgba[streams, 0] = (30 + 0 * strength[streams]).astype(np.uint8)
-    rgba[streams, 1] = (110 - 60 * strength[streams]).astype(np.uint8)
-    rgba[streams, 2] = (230 - 80 * strength[streams]).astype(np.uint8)
-    rgba[streams, 3] = 235
-    # Thicken the 2 m lines a touch for visibility at survey scale.
-    thick = ndimage.binary_dilation(streams)
-    rgba[thick & ~streams] = rgba[streams].mean(axis=0).astype(np.uint8) if streams.any() else 0
-    full = np.zeros(land.shape + (4,), np.uint8)
-    up = np.kron(rgba, np.ones((f, f, 1), np.uint8))
-    full[r0 * f:r0 * f + up.shape[0], c0 * f:c0 * f + up.shape[1]] = up
-    log(f"       {len(polys)} depressions, {int(streams.sum()):,} stream cells")
-    return {
-        "overlays": [W.overlay("flow", full, "Flow paths")],
-        "vectors": [W.geojson("depressions", polys, "Low-lying spots", {"fill": "#0ea5e9", "stroke": "#0369a1", "width": 1})],
-        "legend": {"type": "classes", "items": [["Flow path", "#1e6ee6"], ["Low-lying spot", "#0ea5e9"]]},
-        "stats": {"depressions": len(polys), "total_volume_m3": round(sum(v for v, _ in keep.values())),
-                  "largest_m3": round(max((v for v, _ in keep.values()), default=0)),
-                  "deepest_m": round(max((m for _, m in keep.values()), default=0), 2)},
-    }
-
-
 # --------------------------------------------------------------------------
 
 def main() -> int:
@@ -537,7 +436,7 @@ def main() -> int:
     land = morphology.remove_small_holes(land, 200)
     # Filled holes carry no ground height; land is only where there is one.
     land &= ~np.isnan(ground)
-    ground_filled = fill_holes(ground, g, 25)  # under canopy, for CHM and drainage
+    ground_filled = fill_holes(ground, g, 25)  # under canopy, for CHM
 
     W = Writer(g, args.out)
     products = {}
@@ -547,7 +446,6 @@ def main() -> int:
         ("reef-rugosity", lambda: rugosity(g, W, seabed)),
         ("canopy-height", lambda: canopy(g, W, dsm, ground_filled, land)),
         ("tsunami-safe-zones", lambda: tsunami(g, W, ground, land, [5, 10, 15])),
-        ("drainage", lambda: drainage(g, W, ground_filled, land)),
     ]
     log("[2/3] products")
     for slug, fn in steps:

@@ -25,7 +25,7 @@ topobathy.copc.laz
             │
             ├─ land mask (ground above the water level, cleaned)
             │
-            └─ six products ── numpy / scipy / scikit-image / shapely
+            └─ five products ── numpy / scipy / scikit-image / shapely
                    │
                    ├─ map overlays   PNG, reprojected to lon/lat, 256-colour palette
                    ├─ vectors        GeoJSON (EPSG:4326)
@@ -162,7 +162,7 @@ distance.
   Larger gaps, such as surf zones or deep water with no bottom return, stay empty
   rather than invented.
 - **25 cells for ground under dense canopy** (`ground_filled`): the canopy-height
-  and drainage products need a ground surface there, so this one is filled
+  product needs a ground surface there, so this one is filled
   further.
 
 ### 4.4 The land mask
@@ -178,7 +178,7 @@ Result: **87.5 ha of land** across 5 islands.
 
 ---
 
-## 5. The six products
+## 5. The five products
 
 ### 5.1 Hypsometry
 
@@ -305,43 +305,6 @@ rgba, legend = bands(ground, edges, ["#86efac", "#22c55e", "#15803d"], land & (g
 
 The smaller islands have no ground above 5 m.
 
-### 5.6 Drainage and low spots
-
-**Question:** where does rain collect, and where does it flow?
-
-**Method:** on a 2 m land grid, with the sea as the outlet for everything.
-1. **Priority-flood fill** (Barnes et al., 2014):
-   - start from every land cell touching the sea, in a min-heap by height;
-   - flood inward, raising each cell to at least its lowest neighbour plus a tiny
-     `ε`;
-   - the `ε` gives flats a gradient, so every cell drains somewhere.
-2. **Depressions:** `filled − dem > 0.15 m`, labelled into connected regions. For
-   each: volume (the sum of depths × cell area) and maximum depth. Depressions
-   under 10 m³ are dropped.
-3. **Flow:** D8 flow direction on the filled surface (steepest drop among the 8
-   neighbours). Flow is then accumulated from the highest cell down.
-4. **Flow paths:** cells draining more than 5,000 m².
-
-```python
-heap = [(dem[r, c], r, c) for r, c in coast_cells]; heapq.heapify(heap)
-while heap:
-    z, r, c = heapq.heappop(heap)
-    for rr, cc in neighbours(r, c):
-        if not done[rr, cc]:
-            done[rr, cc] = True
-            filled[rr, cc] = max(dem[rr, cc], z + 1e-4)
-            heapq.heappush(heap, (filled[rr, cc], rr, cc))
-
-depth = filled - dem                                     # > 0 inside depressions
-# D8: receiver = neighbour with the steepest drop; accumulate highest → lowest
-for i in np.argsort(-filled, axis=None):
-    if receiver[i] >= 0:
-        acc[receiver[i]] += acc[i]
-```
-
-**Result:** 49 depressions holding about 26,000 m³ in total; the largest holds
-7,000 m³ and the deepest is 1.3 m.
-
 ---
 
 ## 6. From arrays to the map
@@ -432,7 +395,7 @@ micromamba run -n pcl python scripts/build_ortho_pmtiles.py --from-xyz path/to/t
 | 0 m is the sea surface **at survey time**, not a tidal datum | Hypsometry, tsunami | A local tide gauge or geoid-to-chart-datum offset; subtract it instead of the measured water level |
 | No vertical datum in the file | All heights | Confirm with the survey provider; the water-surface returns at about 53 m suggest ellipsoidal heights |
 | No bottom return in surf and deep water | Bathymetry, rugosity | Nothing in this survey; those areas are left empty, not interpolated |
-| 1 m grid | Rugosity reads low; small beach features are smoothed | Rerun at 0.5 m (set `RES`); gridding is fast, but tree and drainage steps get slower |
+| 1 m grid | Rugosity reads low; small beach features are smoothed | Rerun at 0.5 m (set `RES`); gridding is fast, but the tree step gets slower |
 
 ---
 
@@ -457,7 +420,6 @@ micromamba run -n pcl python scripts/build_ortho_pmtiles.py --from-xyz path/to/t
    - tsunami heights.
 
    These are constants in the product functions:
-   - tree peak spacing and height;
-   - depression and flow thresholds.
+   - tree peak spacing and height.
 5. **Point the map at the new manifest:** change `MANIFEST_URL` in
    `app/pointcloud-products/_components/ProductsApp.tsx`.

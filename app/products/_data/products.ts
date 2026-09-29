@@ -7,7 +7,6 @@ export const PRODUCTS: Product[] = [
   { slug: "reef-rugosity", title: "Reef roughness" },
   { slug: "canopy-height", title: "Trees" },
   { slug: "tsunami-safe-zones", title: "Tsunami safe zones" },
-  { slug: "drainage", title: "Drainage" },
 ];
 
 export const productBySlug = (slug: string) => PRODUCTS.find((p) => p.slug === slug);
